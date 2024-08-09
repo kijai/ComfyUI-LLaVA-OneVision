@@ -193,7 +193,7 @@ class LLaVA_OneVision_Run:
         print(text_outputs)
 
        
-        return (text_outputs[0])
+        return (text_outputs[0],)
      
 NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadLLaVAOneVisionModel": DownloadAndLoadLLaVAOneVisionModel,

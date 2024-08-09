@@ -28,7 +28,7 @@ class DownloadAndLoadLLaVAOneVisionModel:
                     
                     ],),
             "device": (["cuda","cpu","mps"],),
-            "precision": (['4bit', '8bit','fp16','bf16','fp32'],
+            "precision": (['fp4', 'nf4', 'int8','fp16','bf16','fp32'],
                     {
                     "default": 'fp16'
                     }),
@@ -50,10 +50,12 @@ class DownloadAndLoadLLaVAOneVisionModel:
         if precision != 'fp32' and device == 'cpu':
             raise ValueError("fp16 and bf16 are not supported on cpu")
 
-        if 'bit' not in precision:
+        if "16" in precision or "32" in precision:
             dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
+            quantized = False
         else:
             dtype = torch.float16
+            quantized = True
         device = {"cuda": torch.device("cuda"), "cpu": torch.device("cpu"), "mps": torch.device("mps")}[device]
         print(f"using {attention} for attention")
 
@@ -71,22 +73,20 @@ class DownloadAndLoadLLaVAOneVisionModel:
         warnings.filterwarnings("ignore")
         tokenizer = AutoTokenizer.from_pretrained(download_path)
 
-        if '4bit' in precision:
+        if '4' in precision:
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True, 
                 bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_use_double_quant=True
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type=precision
                 )
-        elif '8bit' in precision:
+        elif 'int8' in precision:
             quantization_config = BitsAndBytesConfig(
-                load_in_8bit=True, 
-                bnb_8bit_compute_dtype=torch.bfloat16,
-                bnb_8bit_use_double_quant=True
+                load_in_8bit=True
                 )
         else:
             quantization_config = None
         
-
         model = LlavaQwenForCausalLM.from_pretrained(
             download_path, 
             low_cpu_mem_usage=True, 
@@ -105,16 +105,16 @@ class DownloadAndLoadLLaVAOneVisionModel:
         vision_tower.to(device=device, dtype=dtype)
         image_processor = vision_tower.image_processor
 
-        if 'bit' not in precision:
+        if not quantized:
             model.eval().to(dtype)
 
-        
         llava_model = {
             'model': model, 
             'tokenizer': tokenizer,
             'image_processor': image_processor,
             'dtype': dtype,
-            'device': device
+            'device': device,
+            'quantized': quantized
             }
 
         return (llava_model,)
@@ -171,7 +171,8 @@ class LLaVA_OneVision_Run:
             return_tensors="pt"
             ).unsqueeze(0).to(device)
         
-        #model.to(device)
+        if not llava_model["quantized"]:
+            model.to(device)
         result = model.generate(
             inputs=input_ids,
             images=image_tensors,
@@ -181,8 +182,9 @@ class LLaVA_OneVision_Run:
             max_new_tokens=max_tokens
         )
         if not keep_model_loaded:
-            model.to(offload_device)
-            mm.soft_empty_cache()
+            if not llava_model["quantized"]:
+                model.to(offload_device)
+                mm.soft_empty_cache()
         text_outputs = tokenizer.batch_decode(result, skip_special_tokens=True)
         print(text_outputs)
         

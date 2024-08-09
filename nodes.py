@@ -3,11 +3,12 @@ from torchvision import transforms
 import os
 import copy
 import hashlib
-from .llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
+from .llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from .llava.conversation import conv_templates
 from .llava.model.builder import load_pretrained_model
 from .llava.mm_utils import tokenizer_image_token, process_images
-from transformers import set_seed
+from transformers import set_seed, AutoTokenizer
+from .llava.model.language_model.llava_qwen import LlavaQwenForCausalLM
 
 import warnings
 import comfy.model_management as mm
@@ -65,14 +66,31 @@ class DownloadAndLoadLLaVAOneVisionModel:
                             local_dir_use_symlinks=False)
 
         warnings.filterwarnings("ignore")
-        tokenizer, model, image_processor, max_length = load_pretrained_model(
-            model, 
-            None,
-            model_name="llava_qwen",
-            attn_implementation=attention,
-            load_8bit=False, 
-            load_4bit=False
-            )
+        tokenizer = AutoTokenizer.from_pretrained(download_path)
+    
+        model = LlavaQwenForCausalLM.from_pretrained(download_path, low_cpu_mem_usage=True, attn_implementation=attention)
+
+        mm_use_im_start_end = getattr(model.config, "mm_use_im_start_end", False)
+        mm_use_im_patch_token = getattr(model.config, "mm_use_im_patch_token", True)
+        if mm_use_im_patch_token:
+            tokenizer.add_tokens([DEFAULT_IMAGE_PATCH_TOKEN], special_tokens=True)
+        if mm_use_im_start_end:
+            tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
+        model.resize_token_embeddings(len(tokenizer))
+
+        vision_tower = model.get_vision_tower()       
+        vision_tower.to(device=device, dtype=dtype)
+        image_processor = vision_tower.image_processor
+
+
+        # tokenizer, model, image_processor, max_length = load_pretrained_model(
+        #     model, 
+        #     None,
+        #     model_name="llava_qwen",
+        #     attn_implementation=attention,
+        #     load_8bit=False, 
+        #     load_4bit=False
+        #     )
         model.eval().to(dtype)
 
         

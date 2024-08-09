@@ -7,7 +7,7 @@ from .llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IMA
 from .llava.conversation import conv_templates
 from .llava.model.builder import load_pretrained_model
 from .llava.mm_utils import tokenizer_image_token, process_images
-from transformers import set_seed, AutoTokenizer
+from transformers import set_seed, AutoTokenizer, BitsAndBytesConfig
 from .llava.model.language_model.llava_qwen import LlavaQwenForCausalLM
 
 import warnings
@@ -28,7 +28,7 @@ class DownloadAndLoadLLaVAOneVisionModel:
                     
                     ],),
             "device": (["cuda","cpu","mps"],),
-            "precision": ([ 'fp16','bf16','fp32'],
+            "precision": (['4bit', '8bit','fp16','bf16','fp32'],
                     {
                     "default": 'fp16'
                     }),
@@ -50,7 +50,10 @@ class DownloadAndLoadLLaVAOneVisionModel:
         if precision != 'fp32' and device == 'cpu':
             raise ValueError("fp16 and bf16 are not supported on cpu")
 
-        dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
+        if 'bit' not in precision:
+            dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
+        else:
+            dtype = torch.float16
         device = {"cuda": torch.device("cuda"), "cpu": torch.device("cpu"), "mps": torch.device("mps")}[device]
         print(f"using {attention} for attention")
 
@@ -67,8 +70,28 @@ class DownloadAndLoadLLaVAOneVisionModel:
 
         warnings.filterwarnings("ignore")
         tokenizer = AutoTokenizer.from_pretrained(download_path)
-    
-        model = LlavaQwenForCausalLM.from_pretrained(download_path, low_cpu_mem_usage=True, attn_implementation=attention)
+
+        if '4bit' in precision:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True, 
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True
+                )
+        elif '8bit' in precision:
+            quantization_config = BitsAndBytesConfig(
+                load_in_8bit=True, 
+                bnb_8bit_compute_dtype=torch.bfloat16,
+                bnb_8bit_use_double_quant=True
+                )
+        else:
+            quantization_config = None
+        
+
+        model = LlavaQwenForCausalLM.from_pretrained(
+            download_path, 
+            low_cpu_mem_usage=True, 
+            attn_implementation=attention,
+            quantization_config=quantization_config)
 
         mm_use_im_start_end = getattr(model.config, "mm_use_im_start_end", False)
         mm_use_im_patch_token = getattr(model.config, "mm_use_im_patch_token", True)
@@ -82,16 +105,8 @@ class DownloadAndLoadLLaVAOneVisionModel:
         vision_tower.to(device=device, dtype=dtype)
         image_processor = vision_tower.image_processor
 
-
-        # tokenizer, model, image_processor, max_length = load_pretrained_model(
-        #     model, 
-        #     None,
-        #     model_name="llava_qwen",
-        #     attn_implementation=attention,
-        #     load_8bit=False, 
-        #     load_4bit=False
-        #     )
-        model.eval().to(dtype)
+        if 'bit' not in precision:
+            model.eval().to(dtype)
 
         
         llava_model = {
@@ -156,7 +171,7 @@ class LLaVA_OneVision_Run:
             return_tensors="pt"
             ).unsqueeze(0).to(device)
         
-        model.to(device)
+        #model.to(device)
         result = model.generate(
             inputs=input_ids,
             images=image_tensors,
@@ -167,12 +182,12 @@ class LLaVA_OneVision_Run:
         )
         if not keep_model_loaded:
             model.to(offload_device)
-            mm.soft_empty_cachce()
+            mm.soft_empty_cache()
         text_outputs = tokenizer.batch_decode(result, skip_special_tokens=True)
         print(text_outputs)
         
        
-        return (text_outputs,)
+        return (text_outputs[0],)
      
 NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadLLaVAOneVisionModel": DownloadAndLoadLLaVAOneVisionModel,

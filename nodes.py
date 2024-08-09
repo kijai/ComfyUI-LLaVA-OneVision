@@ -31,6 +31,11 @@ class DownloadAndLoadLLaVAOneVisionModel:
                     {
                     "default": 'fp16'
                     }),
+            "attention": (
+                    [ 'flash_attention_2', 'sdpa', 'eager'],
+                    {
+                    "default": 'sdpa'
+                    }),
 
             },
         }
@@ -40,12 +45,13 @@ class DownloadAndLoadLLaVAOneVisionModel:
     FUNCTION = "loadmodel"
     CATEGORY = "LLaVA-OneVision"
 
-    def loadmodel(self, model, device, precision):
+    def loadmodel(self, model, device, precision, attention):
         if precision != 'fp32' and device == 'cpu':
             raise ValueError("fp16 and bf16 are not supported on cpu")
 
         dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
         device = {"cuda": torch.device("cuda"), "cpu": torch.device("cpu"), "mps": torch.device("mps")}[device]
+        print(f"using {attention} for attention")
 
         model_name = model.split('/')[-1]
         download_path = os.path.join(folder_paths.models_dir, "LLM", "LLaVA-OneVision", model_name)
@@ -63,6 +69,7 @@ class DownloadAndLoadLLaVAOneVisionModel:
             model, 
             None,
             model_name="llava_qwen",
+            attn_implementation=attention,
             load_8bit=False, 
             load_4bit=False
             )

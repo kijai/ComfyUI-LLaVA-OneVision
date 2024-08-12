@@ -10,6 +10,7 @@ from .llava.mm_utils import tokenizer_image_token, process_images
 from transformers import set_seed, AutoTokenizer, BitsAndBytesConfig
 from .llava.model.language_model.llava_qwen import LlavaQwenForCausalLM
 
+import hashlib
 import warnings
 import comfy.model_management as mm
 import folder_paths
@@ -128,8 +129,10 @@ class LLaVA_OneVision_Run:
                 "llava_model": ("LLAVAMODEL", ),
                 "image": ("IMAGE", ),
                 "prompt": ("STRING", {"default": "", "multiline": True} ),
-                "max_tokens": ("INT", {"default": 4096, "min": 1, "max": 4096}),
+                "max_tokens": ("INT", {"default": 4096, "min": 1, "max": 8192}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True}),
+                "temperature": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "seed": ("INT", {"default": 1, "min": 1, "max": 0xffffffffffffffff}),
             },
         }
     
@@ -138,14 +141,18 @@ class LLaVA_OneVision_Run:
     FUNCTION = "run"
     CATEGORY = "LLaVA-OneVision"
 
-    def run(self, image, llava_model, prompt, max_tokens, keep_model_loaded):
+    def run(self, image, llava_model, prompt, max_tokens, keep_model_loaded, temperature, seed):
         offload_device = mm.unet_offload_device()
         model = llava_model["model"]
         tokenizer = llava_model["tokenizer"]
         image_processor = llava_model["image_processor"]
         device = llava_model["device"]
         dtype = llava_model["dtype"]
-
+        
+        seed_bytes = str(seed).encode('utf-8')
+        hash_object = hashlib.sha256(seed_bytes)
+        hashed_seed = int(hash_object.hexdigest(), 16)
+        set_seed(hashed_seed % (2**32))
         
         B, H, W, C = image.shape
         image = image.permute(0, 3, 1, 2)  # Change shape to (B, C, H, W)
@@ -180,9 +187,9 @@ class LLaVA_OneVision_Run:
         result = model.generate(
             inputs=input_ids,
             images=image_tensors,
-            do_sample=False,
+            do_sample=False if temperature == 0.0 else True,
             image_sizes=image_sizes,
-            temperature=0,
+            temperature=temperature,
             max_new_tokens=max_tokens
         )
         if not keep_model_loaded:

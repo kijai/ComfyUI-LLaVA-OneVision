@@ -216,11 +216,12 @@ class OneVisionCaptionFolder:
             "required": {
                 "llava_model": ("LLAVAMODEL", ),
                 "folder_path": ("STRING", ),
-                "prompt": ("STRING", {"default": "", "multiline": True} ),
-                "max_tokens": ("INT", {"default": 4096, "min": 1, "max": 8192}),
+                "prompt": ("STRING", {"default": "You are AI captioning tool, you caption images in very elaborate detail without referring to the image as 'the image', the results should be useful for image model training purposes. You focus on the composition, style and action any possible subject is performing. You don't make assumptions or try to tell a story. You also describe the background of the image separately. Caption this image:", "multiline": True} ),
+                "max_tokens": ("INT", {"default": 512, "min": 1, "max": 8192}),
                 "keep_model_loaded": ("BOOLEAN", {"default": True}),
-                "temperature": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "temperature": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 0xffffffffffffffff}),
+                "max_image_size": ("INT", {"default": 1024, "min": 256, "max": 8192}),
             },
         }
 
@@ -229,7 +230,7 @@ class OneVisionCaptionFolder:
     OUTPUT_IS_LIST = (True,)
     CATEGORY = "LLaVA-OneVision"
 
-    def caption(self, folder_path, llava_model, prompt, max_tokens, keep_model_loaded, temperature, seed):
+    def caption(self, folder_path, llava_model, prompt, max_tokens, keep_model_loaded, temperature, seed, max_image_size):
         from PIL import Image
         image_files = []
         for filename in os.listdir(folder_path):
@@ -244,6 +245,12 @@ class OneVisionCaptionFolder:
             img_path = os.path.join(folder_path, filename)
             try:
                 img = Image.open(img_path).convert('RGB')
+                # Resize image if it exceeds max_image_size
+                if max(img.size) > max_image_size:
+                    aspect_ratio = min(max_image_size / img.size[0], max_image_size / img.size[1])
+                    new_size = (int(img.size[0] * aspect_ratio), int(img.size[1] * aspect_ratio))
+                    img = img.resize(new_size, Image.LANCZOS)
+
                 img_tensor = transform(img)
                 img_tensor = img_tensor.unsqueeze(0).permute(0, 2, 3, 1)
             except IOError:

@@ -268,7 +268,7 @@ class OneVisionCaptionFolder:
             results_list.append(result)
             
             base_filename = os.path.splitext(img_path)[0]
-            with open(f'{base_filename}.txt', 'w') as file:
+            with open(f'{base_filename}.txt', 'w', encoding='utf-8') as file:
                 file.write(result)
             pbar.update(1)
 

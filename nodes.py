@@ -14,7 +14,7 @@ import hashlib
 import warnings
 import comfy.model_management as mm
 import folder_paths
-from comfy_execution.graph_utils import GraphBuilder
+
 from comfy.utils import ProgressBar
 
 
@@ -255,6 +255,7 @@ class OneVisionCaptionFolder:
                 img_tensor = img_tensor.unsqueeze(0).permute(0, 2, 3, 1)
             except IOError:
                 print(f"Cannot open image: {img_path}")
+                continue
 
             result, = vision_node.run(
                 llava_model=llava_model,

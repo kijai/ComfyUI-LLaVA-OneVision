@@ -222,6 +222,8 @@ class OneVisionCaptionFolder:
                 "temperature": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "seed": ("INT", {"default": 1, "min": 1, "max": 0xffffffffffffffff}),
                 "max_image_size": ("INT", {"default": 1024, "min": 256, "max": 8192}),
+                "prefix": ("STRING", {"default": "",}),
+                "suffix": ("STRING", {"default": "",}),
             },
         }
 
@@ -230,7 +232,7 @@ class OneVisionCaptionFolder:
     OUTPUT_IS_LIST = (True,)
     CATEGORY = "LLaVA-OneVision"
 
-    def caption(self, folder_path, llava_model, prompt, max_tokens, keep_model_loaded, temperature, seed, max_image_size):
+    def caption(self, folder_path, llava_model, prompt, max_tokens, keep_model_loaded, temperature, seed, max_image_size, prefix, suffix):
         from PIL import Image
         image_files = []
         for filename in os.listdir(folder_path):
@@ -265,6 +267,7 @@ class OneVisionCaptionFolder:
                 temperature=temperature, 
                 seed=seed)
 
+            result = prefix + result + suffix
             results_list.append(result)
             
             base_filename = os.path.splitext(img_path)[0]

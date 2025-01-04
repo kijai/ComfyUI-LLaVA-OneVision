@@ -20,7 +20,7 @@ try:
     import av
     from decord import VideoReader, cpu
 except ImportError:
-    print("Please install pyav to use video processing functions.")
+    print("Please install 'av' and 'decord' packages to use video processing functions.")
 
 def process_video_with_decord(video_file, data_args):
     vr = VideoReader(video_file, ctx=cpu(0), num_threads=1)

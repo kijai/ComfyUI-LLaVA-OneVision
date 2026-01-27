@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-llava-onevision"
+description = "Nodes to use the OneVision LLaVA models: [a/https://github.com/LLaVA-VL/LLaVA-NeXT](https://github.com/LLaVA-VL/LLaVA-NeXT)"
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["huggingface_hub", "pillow", "transformers"]
+
+[project.urls]
+Repository = "https://github.com/kijai/ComfyUI-LLaVA-OneVision"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI-LLaVA-OneVision"
+Icon = ""
